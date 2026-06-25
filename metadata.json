@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Meal Planner",
+  "description": "A meal planning and macro tracking app.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

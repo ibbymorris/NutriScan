@@ -6,9 +6,10 @@ import {
   X, Zap, ZapOff, CalendarDays, Flame, Droplets, Target, Activity, Settings,
   Calculator, Banknote, RefreshCw, ShoppingCart, Circle, CheckCircle2,
   ChevronUp, SlidersHorizontal, Moon, ChevronRight, Copy, Award, Trophy, Medal, CloudLightning,
-  GripVertical, MessageSquare, Sparkles, ChefHat, Heart, TrendingUp, Dumbbell, HeartPulse, ChevronsUpDown
+  GripVertical, MessageSquare, Sparkles, ChefHat, Heart, TrendingUp, Dumbbell, HeartPulse, ChevronsUpDown,
+  Mic, Type, Share, Beef, Carrot, Milk, Wheat, ShoppingBag, Trash2
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 const triggerHaptic = (pattern: number | number[] = 12) => {
   if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
@@ -253,8 +254,9 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
   const [draftPantryReadyOnly, setDraftPantryReadyOnly] = useState(false);
 
   // Quick Add Scan vs manual step
-  const [quickAddStep, setQuickAddStep] = useState('scan');
+  const [quickAddStep, setQuickAddStep] = useState('select');
   const [isScanningSimulated, setIsScanningSimulated] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [scannedAlertMessage, setScannedAlertMessage] = useState('');
   const [waterIntake, setWaterIntake] = useState(3);
   const [expandedMealIndex, setExpandedMealIndex] = useState(null);
@@ -262,6 +264,7 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
   const [showGrocerySheet, setShowGrocerySheet] = useState(false);
   const [groceryGroupByAisle, setGroceryGroupByAisle] = useState(true);
   const [checkedGroceries, setCheckedGroceries] = useState({});
+  const [clearedGroceries, setClearedGroceries] = useState({});
   const [lowProteinAlert, setLowProteinAlert] = useState(null);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [draggedMealIndex, setDraggedMealIndex] = useState(null);
@@ -277,6 +280,11 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
   const [quickPro, setQuickPro] = useState('15');
   const [quickCarbs, setQuickCarbs] = useState('20');
   const [quickFat, setQuickFat] = useState('5');
+  
+  // AI and Export states
+  const [isExporting, setIsExporting] = useState(false);
+  const [grocerySortMode, setGrocerySortMode] = useState('Aisle'); // 'Aisle' or 'Freshness'
+  const [clickAnim, setClickAnim] = useState({});
 
   useEffect(() => {
     if (swappingMealIndex !== null) {
@@ -291,8 +299,9 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
 
   useEffect(() => {
     if (showQuickAdd) {
-      setQuickAddStep('scan');
+      setQuickAddStep('select');
       setIsScanningSimulated(false);
+      setIsListening(false);
       setScannedAlertMessage('');
       setQuickTitle('');
       setQuickCategory('Snack');
@@ -570,11 +579,13 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
     filteredDayPlan.forEach(meal => {
       const missingIngs = getMissingIngredientsForMeal(meal);
       missingIngs.forEach(ing => {
-        missingItems.push({
-          name: ing,
-          mealTitle: meal.title,
-          aisle: getAisleForIngredient(ing)
-        });
+        if (!clearedGroceries[ing]) {
+          missingItems.push({
+            name: ing,
+            mealTitle: meal.title,
+            aisle: getAisleForIngredient(ing)
+          });
+        }
       });
     });
 
@@ -695,14 +706,43 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
 
   const filteredDayPlan = dayPlan;
 
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    triggerHaptic();
+    try {
+      // Lazy load html2pdf
+      const html2pdf = (await import('html2pdf.js')).default;
+      const element = document.getElementById('meal-plan-content');
+      
+      const opt = {
+        margin: 10,
+        filename: 'Weekly_Meal_Plan.pdf',
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm' as const, format: 'a4', orientation: 'portrait' as const }
+      };
+
+      await html2pdf().set(opt).from(element).save();
+    } catch (e) {
+      console.error("PDF Export failed", e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full bg-[#FAFAFA] relative animate-in fade-in duration-500 pb-24">
+    <div className="flex flex-col h-full bg-[#FAFAFA] relative animate-in fade-in duration-500 pb-24" id="meal-plan-content">
       
       <div className="px-6 pt-16 pb-2 flex items-center justify-between sticky top-0 bg-[#FAFAFA]/90 backdrop-blur-md z-20">
         <h1 className="text-[20px] font-medium tracking-tight text-black">Meal Plan</h1>
-        <button onClick={() => onNavigate('rules')} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-black hover:bg-gray-200 transition-colors">
-          <SlidersHorizontal className="w-4 h-4" strokeWidth={2} />
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleExportPDF} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-black hover:bg-gray-200 transition-colors" title="Share PDF">
+            {isExporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Share className="w-4 h-4" strokeWidth={2} />}
+          </button>
+          <button onClick={() => onNavigate('rules')} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-black hover:bg-gray-200 transition-colors">
+            <SlidersHorizontal className="w-4 h-4" strokeWidth={2} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto hide-scrollbar">
@@ -935,11 +975,18 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
                           onClick={(e) => { 
                             e.stopPropagation(); 
                             toggleEaten(actualIndex); 
+                            setClickAnim(prev => ({...prev, [meal.id]: true}));
+                            setTimeout(() => setClickAnim(prev => ({...prev, [meal.id]: false})), 500);
                           }} 
                           className={`active:scale-90 transition-transform block ${eatenAnims[meal.id] ? 'animate-pop-check' : ''}`}
                         >
                           {meal.eaten ? (
-                            <CheckCircle2 className="w-[22px] h-[22px] text-black" strokeWidth={1.5} />
+                            <motion.div
+                              animate={clickAnim[meal.id] ? { scale: [1, 1.3, 0.9, 1], rotate: [0, -10, 10, 0] } : {}}
+                              transition={{ duration: 0.4 }}
+                            >
+                              <CheckCircle2 className="w-[22px] h-[22px] text-black" strokeWidth={1.5} />
+                            </motion.div>
                           ) : (
                             <Circle className="w-[22px] h-[22px] text-gray-300 hover:text-black transition-colors" strokeWidth={1.5} />
                           )}
@@ -1116,64 +1163,35 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
             </div>
           )}
 
-          {/* Dedicated Premium Hydration Tracker card */}
-          <div className="bg-white border border-gray-150 rounded-[28px] p-5 shadow-sm flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-[14px] bg-blue-50/50 border border-blue-100 flex items-center justify-center shrink-0">
-                <Droplets className="w-5 h-5 text-blue-500" strokeWidth={1.5} />
-              </div>
-              <div>
-                <h3 className="text-[13.5px] font-bold text-black leading-tight">Hydration Tracker</h3>
-                <p className="text-[11px] text-gray-400 mt-0.5">{waterIntake} of 8 glasses logged today</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setWaterIntake(prev => Math.max(0, prev - 1));
-                  triggerHaptic(10);
-                }}
-                className="w-8 h-8 rounded-xl bg-gray-50 border border-gray-150 hover:bg-gray-100 flex items-center justify-center text-gray-500 text-[15px] font-bold active:scale-90 transition-all cursor-pointer"
-              >
-                -
-              </button>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setWaterIntake(prev => Math.min(prev + 1, 10));
-                  triggerHaptic(12);
-                }}
-                className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-100 hover:bg-blue-100 flex items-center justify-center text-blue-600 text-[15px] font-bold active:scale-90 transition-all cursor-pointer"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
           {/* Actionable Grocery Tie-in */}
           {(() => {
-            const missingCount = filteredDayPlan.reduce((acc, m) => acc + m.missing, 0);
-            const estCost = (missingCount * 2.12).toFixed(2);
+            let actualMissingCount = 0;
+            filteredDayPlan.forEach(meal => {
+              const missingIngs = getMissingIngredientsForMeal(meal);
+              missingIngs.forEach(ing => {
+                if (!clearedGroceries[ing]) actualMissingCount++;
+              });
+            });
+            const estCost = (actualMissingCount * 2.12).toFixed(2);
             return (
               <div 
                 onClick={() => setShowGrocerySheet(true)}
-                className="bg-black rounded-[24px] p-5 shadow-lg flex items-center justify-between cursor-pointer hover:scale-[1.01] active:scale-[0.99] transition-all"
+                className="bg-[#F7F7F9] rounded-[24px] p-4 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform group"
               >
-                 <div>
-                    <div className="text-[14px] font-medium text-white mb-0.5">Missing {missingCount} items today</div>
-                    <div className="text-[12px] text-white/60 font-light">Estimated cost: ~£{estCost}</div>
+                 <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100">
+                      <ShoppingBag className="w-[20px] h-[20px] text-black" strokeWidth={2} />
+                    </div>
+                    <div>
+                       <h3 className="text-[15px] font-semibold text-black tracking-tight">Shopping List</h3>
+                       <div className="text-[13px] text-gray-500 font-medium mt-0.5">
+                         {actualMissingCount} items • ~£{estCost}
+                       </div>
+                    </div>
                  </div>
-                 <button 
-                   onClick={(e) => {
-                     e.stopPropagation();
-                     setShowGrocerySheet(true);
-                   }}
-                   className="bg-white text-black px-4 py-2.5 rounded-full text-[13px] font-medium flex items-center gap-2 active:scale-95 transition-all cursor-pointer"
-                 >
-                   <ShoppingCart className="w-4 h-4" /> 
-                   <span>View List</span>
-                 </button>
+                 <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100 group-hover:bg-gray-50 transition-colors">
+                   <ChevronRight className="w-4 h-4 text-black" strokeWidth={2.5} />
+                 </div>
               </div>
             );
           })()}
@@ -1298,164 +1316,250 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
               <div className="flex items-center justify-between mb-1 shrink-0">
                 <h2 className="text-[20px] font-medium tracking-tight text-black">Swap {targetMeal?.type || 'Meal'}</h2>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button className="text-black hover:text-gray-600 transition-colors bg-gray-100 p-2 rounded-full">
+                  <button 
+                    onClick={() => {
+                      if (!showSwapFiltersPanel) {
+                        setDraftSwapFilter(swapFilter);
+                        setDraftMaxPrepTime(maxPrepTime);
+                        setDraftMaxCost(maxCost);
+                        setDraftMinProtein(minProtein);
+                        setDraftPantryReadyOnly(pantryReadyOnly);
+                      }
+                      setShowSwapFiltersPanel(!showSwapFiltersPanel);
+                    }}
+                    className={`relative p-2.5 rounded-full transition-all duration-300 flex items-center justify-center ${
+                      showSwapFiltersPanel 
+                        ? 'bg-black text-white shadow-md' 
+                        : (maxPrepTime !== 45 || maxCost !== 10.0 || minProtein !== 10 || pantryReadyOnly)
+                          ? 'bg-orange-100 text-orange-800 border border-orange-200' 
+                          : 'bg-gray-100 text-black hover:text-gray-600'
+                    }`}
+                  >
                     <SlidersHorizontal className="w-4 h-4" />
+                    {(maxPrepTime !== 45 || maxCost !== 10.0 || minProtein !== 10 || pantryReadyOnly) && !showSwapFiltersPanel && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full border border-white animate-pulse" />
+                    )}
                   </button>
-                  <button onClick={() => setSwappingMealIndex(null)} className="text-black hover:text-gray-600 transition-colors bg-gray-100 p-2 rounded-full">
+                  <button onClick={() => setSwappingMealIndex(null)} className="text-black hover:text-gray-600 transition-colors bg-gray-100 p-2.5 rounded-full">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
               <p className="text-[13px] text-gray-500 font-light mb-4 shrink-0">Alternatives fitting your {targetMeal?.cals || 580} kcal / {targetMeal?.pro || 48}g Protein target.</p>
               
-              {/* Smart Preset Badges */}
-              <div className="flex gap-2 overflow-x-auto hide-scrollbar mb-3 pb-1 -mx-2 px-2 shrink-0">
-                 {[
-                   { name: 'All', time: 45, cost: 10.0, pro: 10, pantry: false },
-                   { name: 'Quick Prep (≤15m)', time: 15, cost: 10.0, pro: 10, pantry: false },
-                   { name: 'Budget (≤£3.50)', time: 45, cost: 3.5, pro: 10, pantry: false },
-                   { name: 'Pantry Ready', time: 45, cost: 10.0, pro: 10, pantry: true },
-                 ].map(preset => {
-                    const isActive = swapFilter === preset.name;
-                    return (
-                      <button 
-                        key={preset.name}
-                        onClick={() => {
-                          setSwapFilter(preset.name);
-                          setMaxPrepTime(preset.time);
-                          setMaxCost(preset.cost);
-                          setMinProtein(preset.pro);
-                          setPantryReadyOnly(preset.pantry);
-                        }}
-                        className={`px-3.5 py-1.5 rounded-full text-[12px] font-semibold whitespace-nowrap transition-colors border ${
-                          isActive 
-                            ? 'bg-black text-white border-black shadow-sm' 
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        {preset.name}
-                      </button>
-                    );
-                 })}
-              </div>
-
-              {/* SLIDING FILTER AXES - Premium control layout */}
-              <div className="bg-gray-50/70 border border-gray-100 rounded-2xl p-4 mb-4 space-y-3.5 shrink-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold tracking-wider text-gray-400 uppercase">Adjust Search Variance</span>
-                  {(maxPrepTime !== 45 || maxCost !== 10.0 || minProtein !== 10 || pantryReadyOnly) && (
-                    <button 
-                      onClick={() => {
-                        setMaxPrepTime(45);
-                        setMaxCost(10.0);
-                        setMinProtein(10);
-                        setPantryReadyOnly(false);
-                        setSwapFilter('All');
-                      }}
-                      className="text-[11px] font-semibold text-black hover:text-gray-600 transition-colors"
-                    >
-                      Reset All
-                    </button>
+              {/* CURRENT ACTIVE FILTERS NOTIFICATION BADGE BAR */}
+              {(maxPrepTime !== 45 || maxCost !== 10.0 || minProtein !== 10 || pantryReadyOnly) && !showSwapFiltersPanel && (
+                <div className="flex flex-wrap items-center gap-1.5 mb-4 px-1.5 py-1 bg-orange-50 border border-orange-100 rounded-xl shrink-0">
+                  <span className="text-[10px] font-bold text-orange-700 uppercase tracking-widest pl-1">Active:</span>
+                  {maxPrepTime !== 45 && (
+                    <span className="bg-white border border-orange-200 text-orange-800 text-[10px] px-2 py-0.5 rounded-md font-medium">≤ {maxPrepTime}m</span>
                   )}
-                </div>
-
-                {/* Prep Time Slider */}
-                <div>
-                  <div className="flex justify-between items-center mb-1 text-[12px]">
-                    <div className="flex items-center gap-1.5 font-semibold text-gray-700">
-                      <Clock className="w-3.5 h-3.5 text-gray-400" />
-                      <span>Prep Time Limit</span>
-                    </div>
-                    <span className="font-extrabold text-black">{maxPrepTime} min max</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-400 font-mono">5m</span>
-                    <input 
-                      type="range" 
-                      min="5" 
-                      max="45" 
-                      step="5"
-                      value={maxPrepTime}
-                      onChange={(e) => {
-                        setMaxPrepTime(Number(e.target.value));
-                        setSwapFilter('Custom');
-                      }}
-                      className="flex-1 accent-black h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <span className="text-[10px] text-gray-400 font-mono">45m</span>
-                  </div>
-                </div>
-
-                {/* Cost Slider */}
-                <div>
-                  <div className="flex justify-between items-center mb-1 text-[12px]">
-                    <div className="flex items-center gap-1.5 font-semibold text-gray-700">
-                      <Banknote className="w-3.5 h-3.5 text-gray-400" />
-                      <span>Budget Cap</span>
-                    </div>
-                    <span className="font-extrabold text-black">£{maxCost.toFixed(2)} max</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-400 font-mono">£1.00</span>
-                    <input 
-                      type="range" 
-                      min="1.00" 
-                      max="10.00" 
-                      step="0.50"
-                      value={maxCost}
-                      onChange={(e) => {
-                        setMaxCost(Number(e.target.value));
-                        setSwapFilter('Custom');
-                      }}
-                      className="flex-1 accent-black h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <span className="text-[10px] text-gray-400 font-mono">£10.00</span>
-                  </div>
-                </div>
-
-                {/* Protein Slider */}
-                <div>
-                  <div className="flex justify-between items-center mb-1 text-[12px]">
-                    <div className="flex items-center gap-1.5 font-semibold text-gray-700">
-                      <Activity className="w-3.5 h-3.5 text-gray-400" />
-                      <span>Minimum Protein</span>
-                    </div>
-                    <span className="font-extrabold text-black">{minProtein}g min</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-400 font-mono">10g</span>
-                    <input 
-                      type="range" 
-                      min="10" 
-                      max="60" 
-                      step="5"
-                      value={minProtein}
-                      onChange={(e) => {
-                        setMinProtein(Number(e.target.value));
-                        setSwapFilter('Custom');
-                      }}
-                      className="flex-1 accent-black h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <span className="text-[10px] text-gray-400 font-mono">60g</span>
-                  </div>
-                </div>
-
-                {/* Pantry Only Toggle */}
-                <div className="flex items-center justify-between pt-1 border-t border-gray-100/50">
-                  <span className="text-[12px] font-semibold text-gray-700 flex items-center gap-1.5">
-                    <ShoppingBasket className="w-3.5 h-3.5 text-gray-400" /> Pantry Ready Only
-                  </span>
+                  {maxCost !== 10.0 && (
+                    <span className="bg-white border border-orange-200 text-orange-800 text-[10px] px-2 py-0.5 rounded-md font-medium">≤ £{maxCost.toFixed(2)}</span>
+                  )}
+                  {minProtein !== 10 && (
+                    <span className="bg-white border border-orange-200 text-orange-800 text-[10px] px-2 py-0.5 rounded-md font-medium">≥ {minProtein}g Pro</span>
+                  )}
+                  {pantryReadyOnly && (
+                    <span className="bg-white border border-orange-200 text-orange-800 text-[10px] px-2 py-0.5 rounded-md font-medium">Pantry Only</span>
+                  )}
                   <button 
                     onClick={() => {
-                      setPantryReadyOnly(!pantryReadyOnly);
-                      setSwapFilter('Custom');
+                      setMaxPrepTime(45);
+                      setMaxCost(10.0);
+                      setMinProtein(10);
+                      setPantryReadyOnly(false);
+                      setSwapFilter('All');
                     }}
-                    className={`w-10 h-6 flex items-center rounded-full p-0.5 transition-colors duration-200 ${pantryReadyOnly ? 'bg-black' : 'bg-gray-200'}`}
+                    className="text-[10px] font-bold text-orange-600 hover:text-orange-800 transition-colors ml-auto pr-1"
                   >
-                    <div className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ${pantryReadyOnly ? 'translate-x-4' : 'translate-x-0'}`} />
+                    Clear All
                   </button>
                 </div>
-              </div>
+              )}
+
+              {/* COLLAPSIBLE STATE-DRAFTED FILTER PANEL */}
+              {showSwapFiltersPanel && (
+                <div className="bg-gray-50/90 border border-gray-150 rounded-3xl p-4 mb-4 space-y-4 shrink-0 shadow-inner animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="flex items-center justify-between pb-1 border-b border-gray-200/50">
+                    <span className="text-[12px] font-bold tracking-wider text-gray-500 uppercase">Filter Parameters</span>
+                    {(draftMaxPrepTime !== 45 || draftMaxCost !== 10.0 || draftMinProtein !== 10 || draftPantryReadyOnly) && (
+                      <button 
+                        onClick={() => {
+                          setDraftMaxPrepTime(45);
+                          setDraftMaxCost(10.0);
+                          setDraftMinProtein(10);
+                          setDraftPantryReadyOnly(false);
+                          setDraftSwapFilter('All');
+                        }}
+                        className="text-[11px] font-bold text-black hover:text-gray-600 transition-colors"
+                      >
+                        Reset Panel
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Smart Preset Badges inside panel */}
+                  <div>
+                    <label className="block text-[11px] font-bold tracking-widest uppercase text-gray-400 mb-1.5">Preset Profiles</label>
+                    <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+                       {[
+                         { name: 'All', time: 45, cost: 10.0, pro: 10, pantry: false },
+                         { name: 'Quick Prep (≤15m)', time: 15, cost: 10.0, pro: 10, pantry: false },
+                         { name: 'Budget (≤£3.50)', time: 45, cost: 3.5, pro: 10, pantry: false },
+                         { name: 'Pantry Ready', time: 45, cost: 10.0, pro: 10, pantry: true },
+                       ].map(preset => {
+                          const isActive = draftSwapFilter === preset.name;
+                          return (
+                            <button 
+                              key={preset.name}
+                              type="button"
+                              onClick={() => {
+                                setDraftSwapFilter(preset.name);
+                                setDraftMaxPrepTime(preset.time);
+                                setDraftMaxCost(preset.cost);
+                                setDraftMinProtein(preset.pro);
+                                setDraftPantryReadyOnly(preset.pantry);
+                              }}
+                              className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors border ${
+                                isActive 
+                                  ? 'bg-black text-white border-black shadow-sm' 
+                                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              {preset.name}
+                            </button>
+                          );
+                       })}
+                    </div>
+                  </div>
+
+                  {/* Prep Time Slider */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1 text-[12px]">
+                      <div className="flex items-center gap-1.5 font-semibold text-gray-700">
+                        <Clock className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Prep Time Limit</span>
+                      </div>
+                      <span className="font-extrabold text-black">{draftMaxPrepTime} min max</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-400 font-mono">5m</span>
+                      <input 
+                        type="range" 
+                        min="5" 
+                        max="45" 
+                        step="5"
+                        value={draftMaxPrepTime}
+                        onChange={(e) => {
+                          setDraftMaxPrepTime(Number(e.target.value));
+                          setDraftSwapFilter('Custom');
+                        }}
+                        className="flex-1 accent-black h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <span className="text-[10px] text-gray-400 font-mono">45m</span>
+                    </div>
+                  </div>
+
+                  {/* Cost Slider */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1 text-[12px]">
+                      <div className="flex items-center gap-1.5 font-semibold text-gray-700">
+                        <Banknote className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Budget Cap</span>
+                      </div>
+                      <span className="font-extrabold text-black">£{draftMaxCost.toFixed(2)} max</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-400 font-mono">£1.00</span>
+                      <input 
+                        type="range" 
+                        min="1.00" 
+                        max="10.00" 
+                        step="0.50"
+                        value={draftMaxCost}
+                        onChange={(e) => {
+                          setDraftMaxCost(Number(e.target.value));
+                          setDraftSwapFilter('Custom');
+                        }}
+                        className="flex-1 accent-black h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <span className="text-[10px] text-gray-400 font-mono">£10.00</span>
+                    </div>
+                  </div>
+
+                  {/* Protein Slider */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1 text-[12px]">
+                      <div className="flex items-center gap-1.5 font-semibold text-gray-700">
+                        <Activity className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Minimum Protein</span>
+                      </div>
+                      <span className="font-extrabold text-black">{draftMinProtein}g min</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-400 font-mono">10g</span>
+                      <input 
+                        type="range" 
+                        min="10" 
+                        max="60" 
+                        step="5"
+                        value={draftMinProtein}
+                        onChange={(e) => {
+                          setDraftMinProtein(Number(e.target.value));
+                          setDraftSwapFilter('Custom');
+                        }}
+                        className="flex-1 accent-black h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <span className="text-[10px] text-gray-400 font-mono">60g</span>
+                    </div>
+                  </div>
+
+                  {/* Pantry Only Toggle */}
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[12px] font-semibold text-gray-700 flex items-center gap-1.5">
+                      <ShoppingBasket className="w-3.5 h-3.5 text-gray-400" /> Pantry Ready Only
+                    </span>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setDraftPantryReadyOnly(!draftPantryReadyOnly);
+                        setDraftSwapFilter('Custom');
+                      }}
+                      className={`w-10 h-6 flex items-center rounded-full p-0.5 transition-colors duration-200 ${draftPantryReadyOnly ? 'bg-black' : 'bg-gray-200'}`}
+                    >
+                      <div className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ${draftPantryReadyOnly ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+
+                  {/* APPLY BUTTONS ACTION */}
+                  <div className="flex gap-2.5 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSwapFiltersPanel(false);
+                      }}
+                      className="flex-1 py-3 border border-gray-200 rounded-2xl text-[13px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMaxPrepTime(draftMaxPrepTime);
+                        setMaxCost(draftMaxCost);
+                        setMinProtein(draftMinProtein);
+                        setPantryReadyOnly(draftPantryReadyOnly);
+                        setSwapFilter(draftSwapFilter);
+                        setShowSwapFiltersPanel(false);
+                      }}
+                      className="flex-1 py-3 bg-black text-white hover:bg-gray-800 rounded-2xl text-[13px] font-semibold transition-colors shadow-md flex items-center justify-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" /> Apply Filters
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Shortfall Optimization Feature */}
               {proteinShortfall > 0 ? (
@@ -1554,24 +1658,40 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
         filteredDayPlan.forEach(meal => {
           const missingIngs = getMissingIngredientsForMeal(meal);
           missingIngs.forEach(ing => {
-            missingItems.push({
-              name: ing,
-              mealTitle: meal.title,
-              aisle: getAisleForIngredient(ing)
-            });
+            if (!clearedGroceries[ing]) {
+              missingItems.push({
+                name: ing,
+                mealTitle: meal.title,
+                aisle: getAisleForIngredient(ing)
+              });
+            }
           });
         });
 
-        const totalCostStr = (missingItems.length * 2.12).toFixed(2);
+        const activeMissingItems = missingItems;
+        const totalCostStr = (activeMissingItems.length * 2.12).toFixed(2);
 
         const groupedItems = {};
-        if (groceryGroupByAisle) {
-          missingItems.forEach(item => {
+        if (grocerySortMode === 'Aisle') {
+          activeMissingItems.forEach(item => {
             if (!groupedItems[item.aisle]) groupedItems[item.aisle] = [];
             groupedItems[item.aisle].push(item);
           });
+        } else if (grocerySortMode === 'Freshness') {
+           // Mock freshness groups for demonstration
+           const freshnessGroups = {
+             'Produce': 'Consume within 3-4 Days',
+             'Meat & Seafood': 'Consume within 1-2 Days',
+             'Dairy': 'Consume within 5-7 Days',
+             'Default': 'Pantry / Long Lasting'
+           };
+           activeMissingItems.forEach(item => {
+             const freshGroup = freshnessGroups[item.aisle] || freshnessGroups['Default'];
+             if (!groupedItems[freshGroup]) groupedItems[freshGroup] = [];
+             groupedItems[freshGroup].push(item);
+           });
         } else {
-          missingItems.forEach(item => {
+          activeMissingItems.forEach(item => {
             if (!groupedItems[item.mealTitle]) groupedItems[item.mealTitle] = [];
             groupedItems[item.mealTitle].push(item);
           });
@@ -1604,7 +1724,7 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
                     className="bg-black text-white px-3.5 py-2 rounded-full text-[12px] font-medium flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                   >
                     {copiedGroceries ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />} 
-                    <span>{copiedGroceries ? 'Copied!' : 'Export'}</span>
+                    <span className="hidden sm:inline">{copiedGroceries ? 'Copied!' : 'Export'}</span>
                   </button>
                   <button onClick={() => setShowGrocerySheet(false)} className="text-black hover:text-gray-600 transition-colors bg-gray-100 p-2 rounded-full cursor-pointer">
                     <X className="w-4 h-4" />
@@ -1612,18 +1732,24 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between bg-gray-50 border border-gray-150 p-1.5 rounded-2xl mb-4 shrink-0">
-                <span className="text-[12px] font-medium text-gray-500 pl-2">Group By:</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-150 p-1.5 rounded-2xl mb-4 shrink-0 overflow-x-auto hide-scrollbar">
+                <span className="text-[12px] font-medium text-gray-500 pl-2 pr-2">Group By:</span>
                 <div className="flex gap-1.5">
                   <button 
-                    onClick={() => setGroceryGroupByAisle(true)}
-                    className={`px-3 py-1 rounded-xl text-[11px] font-semibold transition-all cursor-pointer ${groceryGroupByAisle ? 'bg-white text-black shadow-sm border border-gray-100' : 'text-gray-500'}`}
+                    onClick={() => setGrocerySortMode('Aisle')}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${grocerySortMode === 'Aisle' ? 'bg-white text-black shadow-sm border border-gray-100' : 'text-gray-500 hover:bg-gray-100'}`}
                   >
                     Aisle
                   </button>
                   <button 
-                    onClick={() => setGroceryGroupByAisle(false)}
-                    className={`px-3 py-1 rounded-xl text-[11px] font-semibold transition-all cursor-pointer ${!groceryGroupByAisle ? 'bg-white text-black shadow-sm border border-gray-100' : 'text-gray-500'}`}
+                    onClick={() => setGrocerySortMode('Freshness')}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${grocerySortMode === 'Freshness' ? 'bg-white text-black shadow-sm border border-gray-100' : 'text-gray-500 hover:bg-gray-100'}`}
+                  >
+                    Freshness
+                  </button>
+                  <button 
+                    onClick={() => setGrocerySortMode('Meal')}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${grocerySortMode === 'Meal' ? 'bg-white text-black shadow-sm border border-gray-100' : 'text-gray-500 hover:bg-gray-100'}`}
                   >
                     Meal
                   </button>
@@ -1634,49 +1760,86 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
                 {Object.keys(groupedItems).map(groupName => (
                   <div key={groupName} className="bg-gray-50/40 border border-gray-100 rounded-2xl p-4">
                     <h3 className="text-[13px] font-semibold text-black tracking-wide mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-1.5 uppercase">
-                      {groceryGroupByAisle ? '📍' : '🍽️'} {groupName}
+                      {groupName === 'Proteins' && <Beef className="w-3.5 h-3.5 text-red-400" />}
+                      {groupName === 'Dairy' && <Milk className="w-3.5 h-3.5 text-blue-400" />}
+                      {groupName === 'Produce' && <Carrot className="w-3.5 h-3.5 text-orange-400" />}
+                      {groupName === 'Grains & Pantry' && <Wheat className="w-3.5 h-3.5 text-amber-400" />}
+                      {groupName === 'Other Aisle' && <ShoppingBag className="w-3.5 h-3.5 text-gray-400" />}
+                      {grocerySortMode !== 'Aisle' && <ShoppingBag className="w-3.5 h-3.5 text-gray-400" />}
+                      {groupName}
                     </h3>
                     
                     <div className="space-y-2">
-                      {groupedItems[groupName].map((item, idx) => {
-                        const isChecked = !!checkedGroceries[item.name];
-                        return (
-                          <div 
-                            key={idx}
-                            onClick={() => {
-                              const nextChecked = !isChecked;
-                              setCheckedGroceries(prev => ({ ...prev, [item.name]: nextChecked }));
-                              if (nextChecked) {
-                                triggerHaptic([12, 30, 8]);
-                              } else {
-                                triggerHaptic(8);
-                              }
-                            }}
-                            className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
-                              isChecked 
-                                ? 'bg-white/50 border-gray-200 text-gray-400' 
-                                : 'bg-white border-gray-150 hover:border-gray-200 text-gray-700'
-                            }`}
-                          >
-                            <button type="button" className="shrink-0 cursor-pointer">
-                              {isChecked ? (
-                                <CheckCircle2 className="w-4 h-4 text-orange-500" strokeWidth={2} />
-                              ) : (
-                                <Circle className="w-4 h-4 text-gray-300" strokeWidth={2} />
+                      <AnimatePresence>
+                        {[...groupedItems[groupName]]
+                          .sort((a, b) => {
+                            const aChecked = !!checkedGroceries[a.name];
+                            const bChecked = !!checkedGroceries[b.name];
+                            return (aChecked === bChecked) ? 0 : aChecked ? 1 : -1;
+                          })
+                          .map((item) => {
+                          const isChecked = !!checkedGroceries[item.name];
+                          return (
+                            <motion.div 
+                              key={item.name}
+                              layout
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: isChecked ? 0.4 : 1, y: 0 }}
+                              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                              transition={{ duration: 0.2 }}
+                              onClick={() => {
+                                const nextChecked = !isChecked;
+                                setCheckedGroceries(prev => ({ ...prev, [item.name]: nextChecked }));
+                                if (nextChecked) {
+                                  triggerHaptic([12, 30, 8]);
+                                } else {
+                                  triggerHaptic(8);
+                                }
+                              }}
+                              className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
+                                isChecked 
+                                  ? 'bg-white/50 border-gray-200 text-gray-400' 
+                                  : 'bg-white border-gray-150 hover:border-gray-200 text-gray-700'
+                              }`}
+                            >
+                              <button type="button" className="shrink-0 cursor-pointer">
+                                {isChecked ? (
+                                  <CheckCircle2 className="w-4 h-4 text-orange-500" strokeWidth={2} />
+                                ) : (
+                                  <Circle className="w-4 h-4 text-gray-300" strokeWidth={2} />
+                                )}
+                              </button>
+                              <span className={`text-[12.5px] leading-tight font-medium flex-1 ${isChecked ? 'line-through text-gray-400' : ''}`}>{item.name}</span>
+                              {isChecked && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setClearedGroceries(prev => ({ ...prev, [item.name]: true }));
+                                    setCheckedGroceries(prev => {
+                                      const next = { ...prev };
+                                      delete next[item.name];
+                                      return next;
+                                    });
+                                    triggerHaptic();
+                                  }}
+                                  className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
                               )}
-                            </button>
-                            <span className={`text-[12.5px] leading-tight font-medium ${isChecked ? 'line-through' : ''}`}>{item.name}</span>
-                          </div>
-                        );
-                      })}
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
                     </div>
                   </div>
                 ))}
 
-                {missingItems.length === 0 && (
+                {activeMissingItems.length === 0 && (
                   <div className="py-12 text-center text-gray-400 text-[13px]">
                     <Check className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                    All ingredients are in pantry. No items missing!
+                    All ingredients are in pantry or checked off. No items missing!
                   </div>
                 )}
               </div>
@@ -1693,109 +1856,298 @@ function MealPlannerScreen({ onNavigate, activeProfile }) {
           <div className="absolute bottom-0 inset-x-0 bg-white rounded-t-[40px] z-50 p-6 pt-4 animate-in slide-in-from-bottom-full duration-300 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] pb-12 flex flex-col max-h-[85vh]">
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 shrink-0"></div>
             
-            <div className="flex items-center justify-between mb-4 shrink-0">
-              <div>
-                <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400 block mb-0.5">Backtrack Meals</span>
-                <h2 className="text-[20px] font-medium tracking-tight text-black">Log Off-Plan Food</h2>
+            {quickAddStep === 'select' && (
+              <div className="flex items-center justify-between mb-6 shrink-0">
+                <h2 className="text-[24px] font-bold tracking-tight text-black">Log Food</h2>
+                <button onClick={() => setShowQuickAdd(false)} className="bg-gray-100 hover:bg-gray-200 text-black p-2 rounded-full transition-colors shrink-0">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button onClick={() => setShowQuickAdd(false)} className="text-black hover:text-gray-600 transition-colors bg-gray-100 p-2 rounded-full shrink-0">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+            )}
 
-            <form onSubmit={handleAddOffPlanMeal} className="space-y-4 overflow-y-auto hide-scrollbar flex-1 pb-4">
-              <div>
-                <label className="block text-[11px] font-bold tracking-widest uppercase text-gray-500 mb-2">Meal / Snack Name</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. 'Whey Protein Shake', 'Peanut Butter Toast'" 
-                  value={quickTitle}
-                  onChange={(e) => setQuickTitle(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-[14px] outline-none focus:border-black text-black font-medium"
-                  required
-                />
+            {quickAddStep === 'select' && (
+              <div className="flex flex-col gap-3 overflow-y-auto hide-scrollbar pb-8">
+                <button 
+                  onClick={() => setQuickAddStep('scan')} 
+                  className="bg-gray-50 border border-gray-100 hover:border-black p-4 rounded-3xl flex items-center gap-4 transition-all group active:scale-[0.98]"
+                >
+                  <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-black group-hover:scale-105 transition-transform shrink-0">
+                    <ScanLine className="w-6 h-6" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <h3 className="text-[16px] font-semibold text-black mb-0.5">Scan Meal / Barcode</h3>
+                    <p className="text-[13px] text-gray-500">Fastest way to log food with camera</p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-black transition-colors shrink-0" />
+                </button>
+                
+                <button 
+                  onClick={() => setQuickAddStep('text')} 
+                  className="bg-gray-50 border border-gray-100 hover:border-black p-4 rounded-3xl flex items-center gap-4 transition-all group active:scale-[0.98]"
+                >
+                  <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-black group-hover:scale-105 transition-transform shrink-0">
+                    <Type className="w-6 h-6" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <h3 className="text-[16px] font-semibold text-black mb-0.5">Manual Entry</h3>
+                    <p className="text-[13px] text-gray-500">Type or use voice to log macros</p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-black transition-colors shrink-0" />
+                </button>
               </div>
+            )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold tracking-widest uppercase text-gray-500 mb-2">Category</label>
-                  <select 
-                    value={quickCategory}
-                    onChange={(e) => setQuickCategory(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-[14px] outline-none focus:border-black text-black font-medium appearance-none"
+
+            {quickAddStep === 'scan' && (
+              <div className="flex flex-col flex-1 overflow-y-auto hide-scrollbar pb-4">
+                <div className="flex items-center justify-between pb-1 mb-4">
+                  <span className="text-[12px] font-bold tracking-wider text-black uppercase">Scan Meal / Barcode</span>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setQuickAddStep('select');
+                      setScannedAlertMessage('');
+                    }}
+                    className="text-[12px] font-bold text-gray-400 hover:text-black transition-colors flex items-center gap-1"
                   >
-                    <option value="Snack">Snack</option>
-                    <option value="Breakfast">Breakfast</option>
-                    <option value="Lunch">Lunch</option>
-                    <option value="Dinner">Dinner</option>
-                    <option value="Extra">Extra</option>
-                  </select>
+                    Cancel
+                  </button>
+                </div>
+
+                {/* Simulated Viewfinder */}
+                <div className="relative w-full h-[220px] bg-black rounded-3xl overflow-hidden flex flex-col items-center justify-center shadow-inner mb-6 shrink-0">
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70 z-0 pointer-events-none"></div>
+                  
+                  {/* Grid Lines Overlay */}
+                  <div className="absolute inset-0 opacity-[0.15] border-[0.5px] border-white grid grid-cols-3 grid-rows-3 pointer-events-none"></div>
+
+                  {isScanningSimulated ? (
+                    <div className="relative z-10 flex flex-col items-center justify-center text-center px-6">
+                      <RefreshCw className="w-8 h-8 text-white animate-spin mb-3" />
+                      <p className="text-[14px] font-bold text-white tracking-wide">Reading...</p>
+                    </div>
+                  ) : scannedAlertMessage ? (
+                    <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 animate-in zoom-in-95 duration-200">
+                      <CheckCircle2 className="w-12 h-12 text-white mb-2" />
+                      <p className="text-[16px] font-bold text-white">{scannedAlertMessage}</p>
+                    </div>
+                  ) : (
+                    <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 pointer-events-none">
+                      <ScanLine className="w-10 h-10 text-white/80 mb-3 animate-pulse" />
+                      <p className="text-[13px] font-semibold text-white">Align meal or barcode in frame</p>
+                    </div>
+                  )}
+
+                  {/* Corner Targets */}
+                  <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-white rounded-tl-xl opacity-80"></div>
+                  <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-white rounded-tr-xl opacity-80"></div>
+                  <div className="absolute bottom-6 left-6 w-8 h-8 border-b-2 border-l-2 border-white rounded-bl-xl opacity-80"></div>
+                  <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-white rounded-br-xl opacity-80"></div>
+                </div>
+
+                {/* Preset barcode targets */}
+                <div>
+                  <span className="block text-[12px] font-bold tracking-widest uppercase text-gray-400 mb-3">Simulate Scan</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { 
+                        name: 'Grenade Protein Bar', 
+                        cals: 220, pro: 20, carbs: 15, fat: 8, 
+                        category: 'Snack' 
+                      },
+                      { 
+                        name: 'Arla Skyr Yogurt', 
+                        cals: 150, pro: 16, carbs: 6, fat: 1, 
+                        category: 'Snack' 
+                      },
+                      { 
+                        name: 'ON Whey Shake', 
+                        cals: 140, pro: 24, carbs: 3, fat: 1.5, 
+                        category: 'Breakfast' 
+                      },
+                      { 
+                        name: 'Pip & Nut Cookie', 
+                        cals: 190, pro: 10, carbs: 14, fat: 9, 
+                        category: 'Snack' 
+                      },
+                    ].map(item => (
+                      <button
+                        key={item.name}
+                        type="button"
+                        disabled={isScanningSimulated}
+                        onClick={() => {
+                          triggerHaptic([15, 40]);
+                          setIsScanningSimulated(true);
+                          setScannedAlertMessage('');
+                          setTimeout(() => {
+                            triggerHaptic(30);
+                            setIsScanningSimulated(false);
+                            setScannedAlertMessage(item.name);
+                            setQuickTitle(item.name);
+                            setQuickCals(item.cals.toString());
+                            setQuickPro(item.pro.toString());
+                            setQuickCarbs(item.carbs.toString());
+                            setQuickFat(item.fat.toString());
+                            setQuickCategory(item.category);
+                            setTimeout(() => {
+                              setQuickAddStep('text');
+                            }, 800);
+                          }, 1100);
+                        }}
+                        className="bg-gray-50 border border-gray-100 hover:border-black hover:bg-gray-100/50 p-3.5 rounded-2xl text-left transition-all group flex flex-col justify-between active:scale-[0.98]"
+                      >
+                        <span className="text-[13px] font-bold text-black mb-1 group-hover:text-black transition-colors">{item.name}</span>
+                        <div className="flex gap-2 text-[11px] text-gray-500 font-medium">
+                          <span>{item.cals} kcal</span>
+                          <span>•</span>
+                          <span>{item.pro}g P</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {quickAddStep === 'text' && (
+              <form onSubmit={handleAddOffPlanMeal} className="space-y-4 overflow-y-auto hide-scrollbar flex-1 pb-4">
+                <div className="flex items-center justify-between pb-1 mb-2">
+                  <span className="text-[12px] font-bold tracking-wider text-black uppercase">Log Entry</span>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setQuickAddStep('select');
+                      setScannedAlertMessage('');
+                      setIsListening(false);
+                    }}
+                    className="text-[12px] font-bold text-gray-400 hover:text-black transition-colors flex items-center gap-1"
+                  >
+                    Cancel
+                  </button>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold tracking-widest uppercase text-gray-500 mb-2">Calories (kcal)</label>
-                  <input 
-                    type="number" 
-                    value={quickCals}
-                    onChange={(e) => setQuickCals(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 text-[14px] outline-none focus:border-black text-black font-medium"
-                    min="0"
-                  />
+                  <label className="block text-[12px] font-bold text-gray-500 mb-2">What did you have?</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Protein Shake" 
+                      value={quickTitle}
+                      onChange={(e) => setQuickTitle(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 text-[15px] outline-none focus:border-black focus:bg-white transition-all text-black font-semibold placeholder:font-normal placeholder:text-gray-400"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic();
+                        setIsListening(!isListening);
+                        if (!isListening) {
+                          setTimeout(() => {
+                            triggerHaptic(30);
+                            setIsListening(false);
+                            setQuickTitle('Banana and 2 Eggs');
+                            setQuickCals('250');
+                            setQuickPro('14');
+                            setQuickCarbs('28');
+                            setQuickFat('10');
+                            setQuickCategory('Breakfast');
+                          }, 3000);
+                        }
+                      }}
+                      className={`w-[52px] h-[52px] rounded-2xl flex items-center justify-center shrink-0 transition-all ${
+                        isListening 
+                          ? 'bg-orange-500 text-white animate-pulse shadow-md' 
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-black'
+                      }`}
+                    >
+                      <Mic className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {isListening && (
+                    <div className="text-[12px] text-orange-600 font-medium mt-2 animate-pulse pl-1">
+                      Listening... (e.g. "I had a banana and 2 eggs")
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-[11px] font-bold tracking-widest uppercase text-gray-500 mb-3">Macronutrients (grams)</label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-[10px] text-gray-400 font-bold mb-1 uppercase tracking-wider">Protein</div>
-                    <input 
-                      type="number" 
-                      value={quickPro}
-                      onChange={(e) => setQuickPro(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-250 rounded-xl px-3 py-2 text-[13px] outline-none focus:border-black text-black text-center font-bold"
-                      min="0"
-                    />
+                    <label className="block text-[12px] font-bold text-gray-500 mb-2">Category</label>
+                    <div className="relative">
+                      <select 
+                        value={quickCategory}
+                        onChange={(e) => setQuickCategory(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 text-[15px] outline-none focus:border-black focus:bg-white transition-all text-black font-semibold appearance-none"
+                      >
+                        <option value="Snack">Snack</option>
+                        <option value="Breakfast">Breakfast</option>
+                        <option value="Lunch">Lunch</option>
+                        <option value="Dinner">Dinner</option>
+                        <option value="Extra">Extra</option>
+                      </select>
+                      <ChevronsUpDown className="w-4 h-4 text-gray-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   </div>
+
                   <div>
-                    <div className="text-[10px] text-gray-400 font-bold mb-1 uppercase tracking-wider">Carbs</div>
+                    <label className="block text-[12px] font-bold text-gray-500 mb-2">Calories</label>
                     <input 
                       type="number" 
-                      value={quickCarbs}
-                      onChange={(e) => setQuickCarbs(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-250 rounded-xl px-3 py-2 text-[13px] outline-none focus:border-black text-black text-center font-bold"
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-gray-400 font-bold mb-1 uppercase tracking-wider">Fat</div>
-                    <input 
-                      type="number" 
-                      value={quickFat}
-                      onChange={(e) => setQuickFat(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-250 rounded-xl px-3 py-2 text-[13px] outline-none focus:border-black text-black text-center font-bold"
+                      value={quickCals}
+                      onChange={(e) => setQuickCals(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 text-[15px] outline-none focus:border-black focus:bg-white transition-all text-black font-semibold"
                       min="0"
                     />
                   </div>
                 </div>
-              </div>
 
-              <div className="pt-4">
-                <button 
-                  type="submit"
-                  className="w-full py-4 bg-black text-white hover:bg-gray-800 transition-colors text-[14px] font-semibold rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all"
-                >
-                  <Check className="w-4 h-4" /> Save and Log as Eaten
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setShowQuickAdd(false)}
-                  className="w-full mt-2 py-3 text-[13px] text-gray-500 hover:text-black transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-[12px] font-bold text-gray-500 mb-2 mt-2">Macros (g)</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-bold text-gray-400">P</span>
+                      <input 
+                        type="number" 
+                        value={quickPro}
+                        onChange={(e) => setQuickPro(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-8 pr-3 py-3 text-[15px] outline-none focus:border-black focus:bg-white transition-all text-black font-semibold"
+                        min="0"
+                      />
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-bold text-gray-400">C</span>
+                      <input 
+                        type="number" 
+                        value={quickCarbs}
+                        onChange={(e) => setQuickCarbs(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-8 pr-3 py-3 text-[15px] outline-none focus:border-black focus:bg-white transition-all text-black font-semibold"
+                        min="0"
+                      />
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-bold text-gray-400">F</span>
+                      <input 
+                        type="number" 
+                        value={quickFat}
+                        onChange={(e) => setQuickFat(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-8 pr-3 py-3 text-[15px] outline-none focus:border-black focus:bg-white transition-all text-black font-semibold"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6">
+                  <button 
+                    type="submit"
+                    className="w-full py-4 bg-black text-white hover:bg-gray-800 transition-colors text-[16px] font-semibold rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95"
+                  >
+                    Save Entry
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </>
       )}
